@@ -1,0 +1,13 @@
+CompileFlags:
+  Add:
+    - -I/home/segfault/AsterOS/include
+    - -I/home/segfault/AsterOS/Flanterm/src
+    - -ffreestanding
+    - -fno-builtin
+    - -fno-stack-protector
+    - -fno-pic
+    - -fno-pie
+    - -mno-red-zone
+    - -mgeneral-regs-only
+    - -Wall
+    - -Wextra
