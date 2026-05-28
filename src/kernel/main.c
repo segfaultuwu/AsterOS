@@ -10,6 +10,7 @@
 #include "aster/debug/logging.h"
 
 #include "aster/mm/pmm.h"
+#include "aster/scheduler/scheduler.h"
 #include "aster/user/test_user.h"
 
 #include "aster/kernel/syscall/syscall.h"
@@ -43,6 +44,9 @@ void kmain(void) {
     if (!pmm_init()) {
         log_panic("PMM init failed");
     }
+
+    scheduler_init();
+    log_ok("Scheduler initialized");
 
     __asm__ volatile ("sti");
     log_ok("Interrupts enabled");
