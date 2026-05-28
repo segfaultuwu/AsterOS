@@ -13,7 +13,15 @@ set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
 set(LIMINE_DIR ${CMAKE_SOURCE_DIR}/limine)
-set(FLANTERM_DIR ${CMAKE_SOURCE_DIR}/flanterm)
+set(FLANTERM_DIR ${CMAKE_SOURCE_DIR}/Flanterm)
+
+# Keep a lowercase compatibility path for older generated build rules.
+# Some cached Makefile artifacts still reference ${CMAKE_SOURCE_DIR}/flanterm.
+if(NOT EXISTS ${CMAKE_SOURCE_DIR}/flanterm AND EXISTS ${FLANTERM_DIR})
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E create_symlink ${FLANTERM_DIR} ${CMAKE_SOURCE_DIR}/flanterm
+    )
+endif()
 
 set(ISO_DIR ${CMAKE_BINARY_DIR}/iso_root)
 set(ISO_PATH ${CMAKE_BINARY_DIR}/asteros.iso)
