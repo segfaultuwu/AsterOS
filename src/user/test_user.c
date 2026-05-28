@@ -47,22 +47,17 @@ bool user_test_setup(void) {
         0x48, 0xBE,
         0x40, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
 
-        // mov rdx, 20
-        0x48, 0xC7, 0xC2, 0x14, 0x00, 0x00, 0x00,
+        // mov rdx, 17
+        0x48, 0xC7, 0xC2, 0x11, 0x00, 0x00, 0x00,
 
         // int 0x30
         0xCD, 0x30,
 
         // jmp $
         0xEB, 0xFE,
-
-        // padding until offset 64
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0,
-
-        // offset 64:
-        'H', 'e', 'l', 'l', 'o', ' ', 'f', 'r', 'o', 'm', ' ', 'u', 's', 'e', 'r', '!', '\n', 0
     };
+
+    static const uint8_t user_message[] = "Hello from user!\n";
 
     if (!vmm_map_page(
             USER_CODE_VADDR,
@@ -74,6 +69,7 @@ bool user_test_setup(void) {
     }
 
     copy_bytes((uint8_t *)phys_to_virt(code_phys), user_code, sizeof(user_code));
+    copy_bytes((uint8_t *)phys_to_virt(code_phys) + 64, user_message, sizeof(user_message) - 1);
 
     if (!vmm_map_page(
             USER_STACK_VADDR,
