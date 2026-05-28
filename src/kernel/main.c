@@ -13,6 +13,9 @@
 #include "aster/scheduler/scheduler.h"
 #include "aster/user/test_user.h"
 
+#include "aster/fs/vfs.h"
+#include "aster/fs/ramfs.h"
+
 #include "aster/kernel/syscall/syscall.h"
 #include "aster/kernel/syscall/test_syscall.h"
 
@@ -44,6 +47,31 @@ void kmain(void) {
     if (!pmm_init()) {
         log_panic("PMM init failed");
     }
+
+    if (!vfs_init()) {
+        log_panic("VFS init failed");
+    }
+
+    if (!ramfs_init()) {
+        log_panic("ramfs init failed");
+    }
+
+    if (!vfs_register_root(ramfs_get_ops())) {
+        log_panic("Failed to register root FS");
+    }
+
+    if (!vfs_mkdir("/Docs")) {
+        log_panic("vfs mkdir failed");
+    }
+
+    vfs_write_file("/Docs/ReadMe.TXT", "Hello VFS", 9);
+    vfs_write_file("/docs/CONFIG.json", "{\"v\":1}", 8);
+
+    char buf[64];
+    size_t n = vfs_read_file("/DOCS/readme.txt", buf, sizeof(buf)-1);
+    buf[n] = '\0';
+    log_info("VFS read:");
+    log_info(buf);
 
     scheduler_init();
     log_ok("Scheduler initialized");
