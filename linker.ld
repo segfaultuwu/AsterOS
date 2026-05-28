@@ -14,13 +14,6 @@ SECTIONS
         *(.rodata .rodata.*)
     }
 
-    .usershell : ALIGN(0x1000)
-    {
-        __usershell_start = .;
-        KEEP(*(.usershell .usershell.*))
-        __usershell_end = .;
-    }
-
     .data : ALIGN(0x1000)
     {
         *(.data .data.*)

@@ -6,6 +6,7 @@
 #include "aster/fs/ramfs.h"
 #include "aster/fs/vfs.h"
 #include "aster/debug/logging.h"
+
 #define RAMFS_MAX_NODES 128
 #define RAMFS_NAME_MAX 32
 #define RAMFS_FILE_CAPACITY 2048
@@ -194,11 +195,36 @@ static const char *ramfs_lookup_name(const char *path) {
     return n->name;
 }
 
+static bool ramfs_list_dir(
+    const char *path,
+    void (*callback)(const char *name, bool is_dir, size_t size, void *context),
+    void *context
+) {
+    if (!initialized || callback == NULL) return false;
+
+    ramfs_node_t *dir = lookup_node(path ? path : "/");
+    if (!dir || dir->type != RAMFS_DIR) return false;
+
+    uint32_t child = dir->first_child;
+    while (child) {
+        callback(
+            nodes[child].name,
+            nodes[child].type == RAMFS_DIR,
+            nodes[child].type == RAMFS_FILE ? nodes[child].size : 0,
+            context
+        );
+        child = nodes[child].next_sibling;
+    }
+
+    return true;
+}
+
 static vfs_ops_t ops = {
     .mkdir = ramfs_mkdir,
     .write_file = ramfs_write_file,
     .read_file = ramfs_read_file,
     .lookup_name = ramfs_lookup_name,
+    .list_dir = ramfs_list_dir,
 };
 
 bool ramfs_init(void) {

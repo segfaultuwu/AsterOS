@@ -15,8 +15,7 @@ git submodule update --init --recursive
 
 # Boot:
 ```bash
-mkdir build
+meson setup build
 cd build
-cmake ..
-make run
+ninja
 ```

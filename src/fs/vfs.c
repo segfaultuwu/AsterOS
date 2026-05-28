@@ -8,10 +8,14 @@ bool vfs_init(void) {
     return true;
 }
 
-bool vfs_register_root(const vfs_ops_t *ops) {
+bool vfs_mount_root(const vfs_ops_t *ops) {
     if (ops == NULL) return false;
     root_ops = ops;
     return true;
+}
+
+bool vfs_register_root(const vfs_ops_t *ops) {
+    return vfs_mount_root(ops);
 }
 
 bool vfs_mkdir(const char *path) {
@@ -32,4 +36,13 @@ size_t vfs_read_file(const char *path, void *buffer, size_t buffer_size) {
 const char *vfs_lookup_name(const char *path) {
     if (root_ops == NULL || root_ops->lookup_name == NULL) return NULL;
     return root_ops->lookup_name(path);
+}
+
+bool vfs_list_dir(
+    const char *path,
+    void (*callback)(const char *name, bool is_dir, size_t size, void *context),
+    void *context
+) {
+    if (root_ops == NULL || root_ops->list_dir == NULL) return false;
+    return root_ops->list_dir(path, callback, context);
 }

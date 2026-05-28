@@ -19,6 +19,8 @@ typedef struct {
     char name[TASK_NAME_MAX];
     AddressSpace *addr_space;
     Task *task;
+    uint64_t entry;
+    uint64_t user_stack_top;
 } Process;
 
 #define USER_STACK_SIZE (64 * 4096)  /* 256 KB */

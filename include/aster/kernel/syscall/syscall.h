@@ -15,8 +15,33 @@ typedef enum {
     SYS_MKDIR = 6,
     SYS_VFS_READ = 7,
     SYS_VFS_WRITE = 8,
+    SYS_VFS_LIST = 9,
+    SYS_LSBLK = 10,
+    SYS_MOUNT = 11,
+    SYS_WAIT = 12,
+    SYS_EXEC = 13,
     SYS_MAX
 } syscall_num_t;
+
+typedef struct {
+    char name[64];
+    uint8_t is_dir;
+    uint8_t reserved[7];
+    uint64_t size;
+} syscall_dir_entry_t;
+
+typedef struct {
+    uint8_t drive;
+    uint8_t present;
+    uint16_t reserved0;
+    uint32_t sectors_28;
+    char model[41];
+} syscall_block_device_t;
+
+typedef enum {
+    SYS_MOUNT_RAMFS = 1,
+    SYS_MOUNT_EXT2 = 2,
+} syscall_mount_target_t;
 
 typedef uint64_t (*syscall_handler_t)(
     uint64_t arg0,

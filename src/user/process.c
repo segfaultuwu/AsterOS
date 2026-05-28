@@ -26,17 +26,16 @@ static void _strncpy(char *dest, const char *src, size_t count) {
 /* Process entry point wrapper */
 static void _process_entry(void *context) {
     Process *proc = (Process *)context;
-    if (!proc || !proc->addr_space) {
+    if (!proc || !proc->addr_space || proc->entry == 0 || proc->user_stack_top == 0) {
         return;
     }
 
-    /* Switch to user address space and jump to entry point */
-    /* Note: This is a simplified version. In a real OS, this would:
-     * - Load the process's page tables
-     * - Setup the stack
-     * - Jump to user code
-     */
-    log_infof("Process %s (PID %u) starting at entry point", proc->name, proc->pid);
+    log_infof("Process %s (PID %u) starting at 0x%lx", proc->name, proc->pid, proc->entry);
+    usermode_enter(proc->entry, proc->user_stack_top);
+
+    if (proc->task != NULL) {
+        proc->task->state = TASK_FINISHED;
+    }
 }
 
 Process *process_create(const char *name) {
@@ -171,12 +170,19 @@ bool process_load_elf(Process *proc, const void *elf_data, uint64_t elf_size) {
         return false;
     }
 
+    proc->entry = elf_result.entry;
+    proc->user_stack_top = elf_result.user_stack_top;
+
     log_infof("ELF loaded for process %s: entry=0x%lx", proc->name, elf_result.entry);
     return true;
 }
 
 bool process_exec(Process *proc) {
     if (!proc) {
+        return false;
+    }
+
+    if (proc->entry == 0 || proc->user_stack_top == 0) {
         return false;
     }
 
@@ -202,6 +208,10 @@ void process_destroy(Process *proc) {
         memset(proc->addr_space, 0, sizeof(AddressSpace));
         proc->addr_space = NULL;
     }
+
+    proc->task = NULL;
+    proc->entry = 0;
+    proc->user_stack_top = 0;
 
     memset(proc, 0, sizeof(Process));
 }

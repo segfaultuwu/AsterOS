@@ -14,6 +14,7 @@
 #include "aster/user/shell.h"
 
 #include "aster/fs/vfs.h"
+#include "aster/fs/ext2.h"
 #include "aster/fs/ramfs.h"
 #include "aster/drivers/ata.h"
 
@@ -49,7 +50,6 @@ void kmain(void) {
     keyboard_init();
     log_ok("Keyboard initialized");
     ata_init();
-    ata_test_write();
 
     static uint8_t sector[512] __attribute__((aligned(2)));
 
@@ -68,25 +68,39 @@ void kmain(void) {
         log_panic("VFS init failed");
     }
 
-    if (!ramfs_init()) {
-        log_panic("ramfs init failed");
+    if (ext2_init(ATA_PRIMARY_MASTER) && vfs_mount_root(ext2_get_ops())) {
+        char buf[64];
+        size_t n = vfs_read_file("/README.TXT", buf, sizeof(buf) - 1);
+        if (n > 0) {
+            buf[n] = '\0';
+            log_info("ext2 read:");
+            log_info(buf);
+        } else {
+            log_warn("ext2 root mounted, but /README.TXT was not found");
+        }
+    } else {
+        log_warn("ext2 not found, falling back to ramfs");
+
+        if (!ramfs_init()) {
+            log_panic("ramfs init failed");
+        }
+
+        if (!vfs_register_root(ramfs_get_ops())) {
+            log_panic("Failed to register ramfs root FS");
+        }
+
+        if (!vfs_mkdir("/Docs")) {
+            log_panic("vfs mkdir failed");
+        }
+
+        vfs_write_file("/Docs/ReadMe.TXT", "Hello VFS", 9);
+
+        char buf[64];
+        size_t n = vfs_read_file("/DOCS/readme.txt", buf, sizeof(buf) - 1);
+        buf[n] = '\0';
+        log_info("ramfs read:");
+        log_info(buf);
     }
-
-    if (!vfs_register_root(ramfs_get_ops())) {
-        log_panic("Failed to register root FS");
-    }
-
-    if (!vfs_mkdir("/Docs")) {
-        log_panic("vfs mkdir failed");
-    }
-
-    vfs_write_file("/Docs/ReadMe.TXT", "Hello VFS", 9);
-
-    char buf[64];
-    size_t n = vfs_read_file("/DOCS/readme.txt", buf, sizeof(buf)-1);
-    buf[n] = '\0';
-    log_info("VFS read:");
-    log_info(buf);
 
     scheduler_init();
     log_ok("Scheduler initialized");

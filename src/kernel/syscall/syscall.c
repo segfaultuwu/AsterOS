@@ -5,7 +5,11 @@
 #include "aster/kernel/syscall/syscall.h"
 #include "aster/debug/logging.h"
 #include "aster/drivers/console/console.h"
+#include "aster/drivers/ata.h"
 #include "aster/drivers/keyboard.h"
+#include "aster/fs/ramfs.h"
+#include "aster/fs/ext2.h"
+#include "aster/user/process.h"
 #include "aster/scheduler/scheduler.h"
 #include "aster/fs/vfs.h"
 
@@ -74,6 +78,45 @@ static uint64_t sys_vfs_write(
     uint64_t arg5
 );
 
+static uint64_t sys_vfs_list(
+    uint64_t path,
+    uint64_t entries,
+    uint64_t max_entries,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+);
+
+static uint64_t sys_lsblk(
+    uint64_t entries,
+    uint64_t max_entries,
+    uint64_t arg2,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+);
+
+static uint64_t sys_mount(
+    uint64_t target,
+    uint64_t arg1,
+    uint64_t arg2,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+);
+
+static uint64_t sys_exec(
+    uint64_t path,
+    uint64_t arg1,
+    uint64_t arg2,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+);
+
+#define EXEC_IMAGE_MAX (8ULL * 1024ULL * 1024ULL)
+static uint8_t exec_image[EXEC_IMAGE_MAX];
+
 static syscall_handler_t syscall_table[SYS_MAX] = {
     [SYS_EXIT] = NULL,
     [SYS_WRITE] = NULL,
@@ -84,6 +127,10 @@ static syscall_handler_t syscall_table[SYS_MAX] = {
     [SYS_MKDIR] = NULL,
     [SYS_VFS_READ] = NULL,
     [SYS_VFS_WRITE] = NULL,
+    [SYS_VFS_LIST] = NULL,
+    [SYS_LSBLK] = NULL,
+    [SYS_MOUNT] = NULL,
+    [SYS_EXEC] = NULL,
 };
 
 void syscall_register(syscall_num_t num, syscall_handler_t handler) {
@@ -94,6 +141,33 @@ void syscall_register(syscall_num_t num, syscall_handler_t handler) {
     syscall_table[num] = handler;
 }
 
+static uint64_t sys_wait(
+    uint64_t pid,
+    uint64_t arg1,
+    uint64_t arg2,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+) {
+    (void)arg1; (void)arg2; (void)arg3; (void)arg4; (void)arg5;
+
+    if (pid == 0) return SYSCALL_ERROR;
+
+    /* Busy-wait until the task reaches TASK_FINISHED. */
+    for (;;) {
+        const Task *t = scheduler_get_task((uint32_t)pid);
+        if (t == NULL) {
+            return SYSCALL_ERROR;
+        }
+
+        if (t->state == TASK_FINISHED) {
+            return 0;
+        }
+
+        __asm__ volatile ("sti\n\thlt");
+    }
+}
+
 void syscall_register_defaults(void) {
     syscall_register(SYS_EXIT, sys_exit);
     syscall_register(SYS_WRITE, sys_write);
@@ -102,6 +176,11 @@ void syscall_register_defaults(void) {
     syscall_register(SYS_MKDIR, sys_mkdir);
     syscall_register(SYS_VFS_READ, sys_vfs_read);
     syscall_register(SYS_VFS_WRITE, sys_vfs_write);
+    syscall_register(SYS_VFS_LIST, sys_vfs_list);
+    syscall_register(SYS_LSBLK, sys_lsblk);
+    syscall_register(SYS_MOUNT, sys_mount);
+    syscall_register(SYS_WAIT, sys_wait);
+    syscall_register(SYS_EXEC, sys_exec);
 }
 
 void syscall_init(void) {
@@ -327,4 +406,207 @@ static uint64_t sys_vfs_write(
 
     if (vfs_write_file(p, buf, (size_t)length)) return length;
     return SYSCALL_ERROR;
+}
+
+typedef struct {
+    syscall_dir_entry_t *entries;
+    size_t max_entries;
+    size_t count;
+} vfs_list_context_t;
+
+static void sys_vfs_list_callback(const char *name, bool is_dir, size_t size, void *context) {
+    vfs_list_context_t *ctx = (vfs_list_context_t *)context;
+
+    if (ctx == NULL || ctx->entries == NULL || ctx->count >= ctx->max_entries) {
+        return;
+    }
+
+    syscall_dir_entry_t *entry = &ctx->entries[ctx->count++];
+    size_t i = 0;
+
+    while (name != NULL && name[i] != '\0' && i + 1 < sizeof(entry->name)) {
+        entry->name[i] = name[i];
+        i++;
+    }
+
+    entry->name[i] = '\0';
+    entry->is_dir = is_dir ? 1 : 0;
+    entry->reserved[0] = 0;
+    entry->reserved[1] = 0;
+    entry->reserved[2] = 0;
+    entry->reserved[3] = 0;
+    entry->reserved[4] = 0;
+    entry->reserved[5] = 0;
+    entry->reserved[6] = 0;
+    entry->size = (uint64_t)size;
+}
+
+static uint64_t sys_vfs_list(
+    uint64_t path,
+    uint64_t entries,
+    uint64_t max_entries,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+) {
+    (void)arg3;
+    (void)arg4;
+    (void)arg5;
+
+    if (path == 0 || entries == 0 || max_entries == 0) {
+        return SYSCALL_ERROR;
+    }
+
+    const char *p = (const char *)path;
+    syscall_dir_entry_t *out = (syscall_dir_entry_t *)entries;
+    vfs_list_context_t ctx = {
+        .entries = out,
+        .max_entries = (size_t)max_entries,
+        .count = 0,
+    };
+
+    if (!vfs_list_dir(p, sys_vfs_list_callback, &ctx)) {
+        return SYSCALL_ERROR;
+    }
+
+    return (uint64_t)ctx.count;
+}
+
+static uint64_t sys_lsblk(
+    uint64_t entries,
+    uint64_t max_entries,
+    uint64_t arg2,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+) {
+    (void)arg2;
+    (void)arg3;
+    (void)arg4;
+    (void)arg5;
+
+    if (entries == 0 || max_entries == 0) {
+        return SYSCALL_ERROR;
+    }
+
+    syscall_block_device_t *out = (syscall_block_device_t *)entries;
+    size_t count = 0;
+
+    for (uint8_t drive = 0; drive < 4 && count < (size_t)max_entries; drive++) {
+        const ata_device_t *dev = ata_get_device((ata_drive_t)drive);
+        if (dev == NULL || !dev->present) {
+            continue;
+        }
+
+        syscall_block_device_t *entry = &out[count++];
+        entry->drive = drive;
+        entry->present = 1;
+        entry->reserved0 = 0;
+        entry->sectors_28 = dev->sectors_28;
+
+        size_t i = 0;
+        while (dev->model[i] != '\0' && i + 1 < sizeof(entry->model)) {
+            entry->model[i] = dev->model[i];
+            i++;
+        }
+        entry->model[i] = '\0';
+        while (i + 1 < sizeof(entry->model)) {
+            entry->model[++i - 1] = '\0';
+        }
+    }
+
+    return (uint64_t)count;
+}
+
+static uint64_t sys_mount(
+    uint64_t target,
+    uint64_t arg1,
+    uint64_t arg2,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+) {
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
+    (void)arg4;
+    (void)arg5;
+
+    if (target == SYS_MOUNT_EXT2) {
+        if (ext2_init(ATA_PRIMARY_MASTER) && vfs_mount_root(ext2_get_ops())) {
+            return 0;
+        }
+
+        return SYSCALL_ERROR;
+    }
+
+    if (target == SYS_MOUNT_RAMFS) {
+        if (ramfs_init() && vfs_mount_root(ramfs_get_ops())) {
+            return 0;
+        }
+
+        return SYSCALL_ERROR;
+    }
+
+    return SYSCALL_ERROR;
+}
+
+static uint64_t sys_exec(
+    uint64_t path,
+    uint64_t arg1,
+    uint64_t arg2,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+) {
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
+    (void)arg4;
+    (void)arg5;
+
+    if (path == 0) {
+        return SYSCALL_ERROR;
+    }
+
+    char exec_path[256];
+    const char *src = (const char *)path;
+    size_t i = 0;
+
+    while (i + 1 < sizeof(exec_path) && src[i] != '\0' && src[i] != ' ') {
+        exec_path[i] = src[i];
+        i++;
+    }
+
+    if (i == 0 || (src[i] != '\0' && src[i] != ' ')) {
+        return SYSCALL_ERROR;
+    }
+
+    exec_path[i] = '\0';
+
+    size_t image_size = vfs_read_file(exec_path, exec_image, sizeof(exec_image));
+    log_infof("sys_exec: read %lu bytes for %s", (unsigned long)image_size, exec_path);
+    if (image_size == 0 || image_size >= sizeof(exec_image)) {
+        log_warnf("sys_exec: failed to read %s", exec_path);
+        return SYSCALL_ERROR;
+    }
+
+    Process *proc = process_create(exec_path);
+    if (proc == NULL) {
+        log_warn("sys_exec: failed to create process");
+        return SYSCALL_ERROR;
+    }
+
+    if (!process_load_elf(proc, exec_image, (uint64_t)image_size)) {
+        process_destroy(proc);
+        return SYSCALL_ERROR;
+    }
+
+    if (!process_exec(proc)) {
+        process_destroy(proc);
+        return SYSCALL_ERROR;
+    }
+
+    log_infof("sys_exec: launched %s as PID %u", exec_path, proc->pid);
+    return proc->pid;
 }
