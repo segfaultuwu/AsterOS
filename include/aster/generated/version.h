@@ -9,11 +9,13 @@
 
 #define ASTER_VERSION_STRING "0.1.0"
 
-#define ASTER_GIT_COMMIT "4b38e3b"
+#define ASTER_GIT_COMMIT "57da298"
 #define ASTER_GIT_BRANCH "master"
 #define ASTER_GIT_DIRTY true
 
 #define ASTER_BUILD_DATE "2026-05-28"
-#define ASTER_BUILD_TIME "14:27:33 UTC"
+#define ASTER_BUILD_TIME "14:42:57 UTC"
+
+#define ASTER_FULL_VERSION "0.1.0-57da298"
 
 #endif

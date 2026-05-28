@@ -15,6 +15,7 @@
 
 #include "aster/fs/vfs.h"
 #include "aster/fs/ramfs.h"
+#include "aster/drivers/ata.h"
 
 #include "aster/kernel/syscall/syscall.h"
 #include "aster/kernel/syscall/test_syscall.h"
@@ -47,6 +48,17 @@ void kmain(void) {
 
     keyboard_init();
     log_ok("Keyboard initialized");
+    ata_init();
+    ata_test_write();
+
+    static uint8_t sector[512] __attribute__((aligned(2)));
+
+    if (ata_read_sector(ATA_PRIMARY_MASTER, 0, sector)) {
+        log_ok("ATA sector 0 read OK");
+        log_hex64("sector0 first qword", *(uint64_t *)sector);
+    } else {
+        log_warn("ATA sector 0 read failed");
+    }
 
     if (!pmm_init()) {
         log_panic("PMM init failed");

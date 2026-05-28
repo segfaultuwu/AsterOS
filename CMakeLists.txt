@@ -26,6 +26,9 @@ endif()
 set(ISO_DIR ${CMAKE_BINARY_DIR}/iso_root)
 set(ISO_PATH ${CMAKE_BINARY_DIR}/asteros.iso)
 
+set(DISK_IMG ${CMAKE_SOURCE_DIR}/disk.img)
+set(DISK_SIZE 64M)
+
 set(CMAKE_ASM_NASM_OBJECT_FORMAT elf64)
 
 set(KERNEL_C_FLAGS
@@ -55,8 +58,6 @@ set(KERNEL_LINK_FLAGS
 )
 
 # Optional PSF font object.
-# If you no longer use the old PSF renderer, you can remove this whole block
-# and also remove ${FONT_OBJ} from add_executable().
 set(FONT_SRC ${CMAKE_SOURCE_DIR}/assets/font.psf)
 set(FONT_BUILD ${CMAKE_BINARY_DIR}/font.psf)
 set(FONT_OBJ ${CMAKE_BINARY_DIR}/font.o)
@@ -120,6 +121,16 @@ add_custom_target(version_header
     COMMENT "Generating version.h"
 )
 
+add_custom_command(
+    OUTPUT ${DISK_IMG}
+    COMMAND qemu-img create -f raw ${DISK_IMG} ${DISK_SIZE}
+    COMMENT "Creating ATA disk image: ${DISK_IMG}"
+)
+
+add_custom_target(disk-img
+    DEPENDS ${DISK_IMG}
+)
+
 add_executable(${KERNEL_NAME}
     ${KERNEL_C_SOURCES}
     ${NASM_OBJECT_FILES}
@@ -150,8 +161,6 @@ set_target_properties(${KERNEL_NAME} PROPERTIES
 )
 
 # Safe source listing.
-# The old version passed a semicolon-separated CMake list directly to echo,
-# causing the shell to try executing source files as commands.
 string(REPLACE ";" "\n" KERNEL_C_SOURCES_TEXT "${KERNEL_C_SOURCES}")
 string(REPLACE ";" "\n" KERNEL_NASM_SOURCES_TEXT "${KERNEL_NASM_SOURCES}")
 
@@ -225,6 +234,7 @@ add_custom_target(iso
 add_custom_target(run
     COMMAND qemu-system-x86_64
         -cdrom ${ISO_PATH}
+        -drive file=${DISK_IMG},format=raw,if=ide,index=0,media=disk
         -m 256M
         -serial stdio
         -vga std
@@ -232,7 +242,7 @@ add_custom_target(run
         -D ${CMAKE_BINARY_DIR}/qemu.log
         -no-reboot
         -no-shutdown
-    DEPENDS iso
+    DEPENDS iso disk-img
     COMMENT "Running AsterOS x86_64"
 )
 
@@ -240,18 +250,20 @@ add_custom_target(run-uefi
     COMMAND qemu-system-x86_64
         -bios /usr/share/ovmf/x64/OVMF.fd
         -cdrom ${ISO_PATH}
+        -drive file=${DISK_IMG},format=raw,if=ide,index=0,media=disk
         -m 256M
         -serial stdio
         -vga std
         -no-reboot
         -no-shutdown
-    DEPENDS iso
+    DEPENDS iso disk-img
     COMMENT "Running AsterOS with Limine UEFI"
 )
 
 add_custom_target(debug
     COMMAND qemu-system-x86_64
         -cdrom ${ISO_PATH}
+        -drive file=${DISK_IMG},format=raw,if=ide,index=0,media=disk
         -m 256M
         -serial stdio
         -vga std
@@ -259,7 +271,7 @@ add_custom_target(debug
         -S
         -no-reboot
         -no-shutdown
-    DEPENDS iso
+    DEPENDS iso disk-img
     COMMENT "Running AsterOS debug mode"
 )
 
@@ -268,4 +280,17 @@ add_custom_target(clean-iso
     COMMAND ${CMAKE_COMMAND} -E remove -f ${ISO_PATH}
     COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/qemu.log
     COMMENT "Cleaning ISO files"
+)
+
+add_custom_target(clean-disk
+    COMMAND ${CMAKE_COMMAND} -E remove -f ${DISK_IMG}
+    COMMENT "Removing disk image"
+)
+
+add_custom_target(clean-all
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${ISO_DIR}
+    COMMAND ${CMAKE_COMMAND} -E remove -f ${ISO_PATH}
+    COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/qemu.log
+    COMMAND ${CMAKE_COMMAND} -E remove -f ${DISK_IMG}
+    COMMENT "Cleaning ISO, QEMU log and disk image"
 )
