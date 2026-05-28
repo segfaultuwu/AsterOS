@@ -1,5 +1,5 @@
-#ifndef ASTER_FRAMEBUFFER_H
-#define ASTER_FRAMEBUFFER_H
+#ifndef ASTER_DRIVERS_FRAMEBUFFER_H
+#define ASTER_DRIVERS_FRAMEBUFFER_H
 
 #include <stdint.h>
 #include <stdbool.h>

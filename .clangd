@@ -1,7 +1,7 @@
 CompileFlags:
   Add:
     - -I/home/segfault/AsterOS/include
-    - -I/home/segfault/AsterOS/Flanterm/src
+    - -I/home/segfault/AsterOS/flanterm/src
     - -ffreestanding
     - -fno-builtin
     - -fno-stack-protector

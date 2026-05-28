@@ -1,20 +1,14 @@
-#ifndef KEYBOARD_H
-#define KEYBOARD_H
+#ifndef ASTER_DRIVERS_KEYBOARD_H
+#define ASTER_DRIVERS_KEYBOARD_H
 
-#include <stdint.h>
 #include <stdbool.h>
 #include "aster/arch/x86_64/idt.h"
 
-// Initialize keyboard
-void keyboard_init();
+void keyboard_init(void);
+void keyboard_handler(registers_t *regs);
+void keyboard_poll(void);
 
-// Keyboard interrupt handler
-void keyboard_handler(registers_t* regs);
+char keyboard_read(void);
+bool keyboard_has_data(void);
 
-// Read character from keyboard buffer
-char keyboard_read();
-
-// Check if keyboard buffer has data
-bool keyboard_has_data();
-
-#endif // KEYBOARD_H
+#endif

@@ -13,12 +13,11 @@ set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
 set(LIMINE_DIR ${CMAKE_SOURCE_DIR}/limine)
+set(FLANTERM_DIR ${CMAKE_SOURCE_DIR}/flanterm)
 
 set(ISO_DIR ${CMAKE_BINARY_DIR}/iso_root)
 set(ISO_PATH ${CMAKE_BINARY_DIR}/asteros.iso)
 
-# Limine ładuje kernel x86_64 w long mode,
-# więc kernel budujemy jako ELF64.
 set(CMAKE_ASM_NASM_OBJECT_FORMAT elf64)
 
 set(KERNEL_C_FLAGS
@@ -31,14 +30,11 @@ set(KERNEL_C_FLAGS
     -fno-omit-frame-pointer
     -mno-red-zone
     -mcmodel=kernel
+    -mgeneral-regs-only
     -Wall
     -Wextra
     -Wpedantic
     -O2
-)
-
-set(KERNEL_NASM_FLAGS
-    -f elf64
 )
 
 set(KERNEL_LINK_FLAGS
@@ -50,10 +46,9 @@ set(KERNEL_LINK_FLAGS
     -T ${CMAKE_SOURCE_DIR}/linker.ld
 )
 
-set(FONT_SRC ${CMAKE_SOURCE_DIR}/assets/font.psf)
-set(FONT_BUILD ${CMAKE_BINARY_DIR}/font.psf)
-set(FONT_OBJ ${CMAKE_BINARY_DIR}/font.o)
-
+# Optional PSF font object.
+# If you no longer use the old PSF renderer, you can remove this whole block
+# and also remove ${FONT_OBJ} from add_executable().
 set(FONT_SRC ${CMAKE_SOURCE_DIR}/assets/font.psf)
 set(FONT_BUILD ${CMAKE_BINARY_DIR}/font.psf)
 set(FONT_OBJ ${CMAKE_BINARY_DIR}/font.o)
@@ -76,18 +71,33 @@ file(GLOB_RECURSE KERNEL_C_SOURCES CONFIGURE_DEPENDS
     ${SRC_DIR}/*.c
 )
 
+list(APPEND KERNEL_C_SOURCES
+    ${FLANTERM_DIR}/src/flanterm.c
+    ${FLANTERM_DIR}/src/flanterm_backends/fb.c
+)
+
+list(REMOVE_DUPLICATES KERNEL_C_SOURCES)
+
 file(GLOB_RECURSE KERNEL_NASM_SOURCES CONFIGURE_DEPENDS
     ${SRC_DIR}/boot/*.asm
+    ${SRC_DIR}/arch/x86_64/*.asm
+    ${SRC_DIR}/arch/x86_64/**/*.asm
 )
+
+list(REMOVE_DUPLICATES KERNEL_NASM_SOURCES)
 
 set(NASM_OBJECT_FILES)
 
 foreach(asm_file ${KERNEL_NASM_SOURCES})
-  get_filename_component(obj_name ${asm_file} NAME_WE)
-  set(obj_file "${CMAKE_BINARY_DIR}/${obj_name}.o")
+  file(RELATIVE_PATH asm_rel ${CMAKE_SOURCE_DIR} ${asm_file})
+  string(REPLACE "/" "_" obj_name ${asm_rel})
+  string(REPLACE ".asm" ".o" obj_name ${obj_name})
+
+  set(obj_file "${CMAKE_BINARY_DIR}/asm/${obj_name}")
 
   add_custom_command(
         OUTPUT ${obj_file}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/asm
         COMMAND nasm -f elf64 -o ${obj_file} ${asm_file}
         DEPENDS ${asm_file}
         COMMENT "Building NASM object ${obj_file}"
@@ -107,6 +117,7 @@ target_include_directories(${KERNEL_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/include/aster
     ${LIMINE_DIR}
+    ${FLANTERM_DIR}/src
 )
 
 target_compile_options(${KERNEL_NAME} PRIVATE
@@ -122,11 +133,23 @@ set_target_properties(${KERNEL_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
+# Safe source listing.
+# The old version passed a semicolon-separated CMake list directly to echo,
+# causing the shell to try executing source files as commands.
+string(REPLACE ";" "\n" KERNEL_C_SOURCES_TEXT "${KERNEL_C_SOURCES}")
+string(REPLACE ";" "\n" KERNEL_NASM_SOURCES_TEXT "${KERNEL_NASM_SOURCES}")
+
+file(WRITE ${CMAKE_BINARY_DIR}/sources.txt
+"C sources:
+${KERNEL_C_SOURCES_TEXT}
+
+NASM sources:
+${KERNEL_NASM_SOURCES_TEXT}
+"
+)
+
 add_custom_target(print-sources
-    COMMAND ${CMAKE_COMMAND} -E echo "C sources:"
-    COMMAND ${CMAKE_COMMAND} -E echo "${KERNEL_C_SOURCES}"
-    COMMAND ${CMAKE_COMMAND} -E echo "NASM sources:"
-    COMMAND ${CMAKE_COMMAND} -E echo "${KERNEL_NASM_SOURCES}"
+    COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_BINARY_DIR}/sources.txt
 )
 
 add_custom_target(limine
@@ -188,10 +211,13 @@ add_custom_target(run
         -cdrom ${ISO_PATH}
         -m 256M
         -serial stdio
+        -vga std
+        -d int,cpu_reset
+        -D ${CMAKE_BINARY_DIR}/qemu.log
         -no-reboot
         -no-shutdown
     DEPENDS iso
-    COMMENT "Running AsterOS with Limine"
+    COMMENT "Running AsterOS x86_64"
 )
 
 add_custom_target(run-uefi
@@ -200,6 +226,7 @@ add_custom_target(run-uefi
         -cdrom ${ISO_PATH}
         -m 256M
         -serial stdio
+        -vga std
         -no-reboot
         -no-shutdown
     DEPENDS iso
@@ -211,6 +238,7 @@ add_custom_target(debug
         -cdrom ${ISO_PATH}
         -m 256M
         -serial stdio
+        -vga std
         -s
         -S
         -no-reboot
@@ -222,5 +250,6 @@ add_custom_target(debug
 add_custom_target(clean-iso
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${ISO_DIR}
     COMMAND ${CMAKE_COMMAND} -E remove -f ${ISO_PATH}
+    COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/qemu.log
     COMMENT "Cleaning ISO files"
 )

@@ -1,5 +1,5 @@
-#ifndef SERIAL_H
-#define SERIAL_H
+#ifndef ASTER_DRIVERS_SERIAL_H
+#define ASTER_DRIVERS_SERIAL_H
 
 #include <stdint.h>
 

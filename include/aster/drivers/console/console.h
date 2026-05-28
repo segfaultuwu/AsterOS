@@ -1,9 +1,13 @@
-#ifndef CONSOLE_H
-#define CONSOLE_H
+#ifndef ASTER_DRIVERS_CONSOLE_H
+#define ASTER_DRIVERS_CONSOLE_H
 
-// Put a character and string
 #include <stdint.h>
-void console_draw_char(char c, uint64_t x, uint64_t y, uint32_t fg, uint32_t bg);
-void console_draw_string(const char *str, uint64_t x, uint64_t y, uint32_t fg, uint32_t bg);
+#include <stdbool.h>
+#include <stddef.h>
+
+bool console_init(void);
+void console_write(const char *str);
+void console_putc(char c);
+void console_clear(void);
 
 #endif

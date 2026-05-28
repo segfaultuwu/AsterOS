@@ -1,5 +1,5 @@
-#ifndef FONT_H
-#define FONT_H
+#ifndef ASTER_DRIVERS_FONT_H
+#define ASTER_DRIVERS_FONT_H
 
 #include <stdint.h>
 #include <stddef.h>

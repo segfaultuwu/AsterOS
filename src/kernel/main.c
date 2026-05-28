@@ -1,53 +1,60 @@
 #include <stdint.h>
-#include <stdbool.h>
+
+#include "aster/arch/x86_64/gdt.h"
+#include "aster/arch/x86_64/idt.h"
 
 #include "aster/drivers/console/console.h"
-#include "aster/drivers/framebuffer.h"
+#include "aster/drivers/keyboard.h"
 #include "aster/drivers/serial.h"
-#include "aster/drivers/framebuffer.h"
 
-#define CAT_MOCHA_BASE 0x1E1E2E
-#define CAT_MOCHA_RED  0xF38BA8
-#define CAT_MOCHA_GREEN 0xA6E3A1
-#define CAT_MOCHA_BLUE 0x89B4FA
+#include "aster/debug/logging.h"
+
+#include "aster/mm/pmm.h"
+#include "aster/user/test_user.h"
+
+#include "aster/kernel/syscall/syscall.h"
+#include "aster/kernel/syscall/test_syscall.h"
 
 void kmain(void) {
     serial_init();
-    serial_puts("kmain reached\n");
 
-    framebuffer_init();
-
-    if (!framebuffer_is_active()) {
-        serial_puts("framebuffer not active\n");
+    if (!console_init()) {
+        serial_puts("console_init failed\n");
 
         for (;;) {
             __asm__ volatile ("hlt");
         }
     }
 
-    serial_puts("framebuffer active\n");
+    console_clear();
+    log_init();
 
-    framebuffer_clear(CAT_MOCHA_BASE);
+    log_ok("Console initialized");
 
-    for (uint64_t y = 50; y < 150; y++) {
-        for (uint64_t x = 50; x < 300; x++) {
-            framebuffer_put_pixel(x, y, CAT_MOCHA_RED);
-        }
+    gdt_init();
+    log_ok("GDT initialized");
+
+    idt_init();
+    log_ok("IDT initialized");
+
+    keyboard_init();
+    log_ok("Keyboard initialized");
+
+    if (!pmm_init()) {
+        log_panic("PMM init failed");
     }
 
-    for (uint64_t y = 180; y < 280; y++) {
-        for (uint64_t x = 50; x < 300; x++) {
-            framebuffer_put_pixel(x, y, CAT_MOCHA_GREEN);
-        }
-    }
+    __asm__ volatile ("sti");
+    log_ok("Interrupts enabled");
 
-    for (uint64_t x = 0; x < 600; x++) {
-        framebuffer_put_pixel(x, 20, CAT_MOCHA_BLUE);
-    }
+    syscall_init();
+    syscall_register_defaults();
+    log_ok("Syscalls initialized");
 
-    console_draw_string("hello, world!", 20, 20,  CAT_MOCHA_RED, CAT_MOCHA_GREEN);
+    // Test syscall from kernel space
+    test_syscall_from_kernel();
 
-    serial_puts("draw test done\n");
+    user_test_setup();
 
     for (;;) {
         __asm__ volatile ("hlt");

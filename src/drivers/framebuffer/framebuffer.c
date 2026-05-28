@@ -1,16 +1,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-
 #include <limine.h>
 
+#include "aster/arch/x86_64/boot/limine.h"
 #include "aster/drivers/framebuffer.h"
-
-__attribute__((used, section(".requests")))
-static volatile struct limine_framebuffer_request framebuffer_request = {
-    .id = LIMINE_FRAMEBUFFER_REQUEST,
-    .revision = 0,
-};
 
 static struct limine_framebuffer *fb = NULL;
 
