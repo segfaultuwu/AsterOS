@@ -10,6 +10,9 @@
 git submodule update --init --recursive
 ```
 
+> [!WARNING]
+> **DO NOT** RUN THIS ON REAL HARDWARE UNLESS YOU WANT YOUR DISK TO GET CORRUPTED
+
 # Boot:
 ```bash
 mkdir build
