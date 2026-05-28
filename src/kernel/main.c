@@ -11,7 +11,7 @@
 
 #include "aster/mm/pmm.h"
 #include "aster/scheduler/scheduler.h"
-#include "aster/user/test_user.h"
+#include "aster/user/shell.h"
 
 #include "aster/fs/vfs.h"
 #include "aster/fs/ramfs.h"
@@ -101,7 +101,11 @@ void kmain(void) {
     // Test syscall from kernel space
     test_syscall_from_kernel();
 
-    user_test_setup();
+    if (!shell_spawn()) {
+        log_panic("Failed to spawn user shell");
+    }
+
+    scheduler_run();
 
     for (;;) {
         __asm__ volatile ("hlt");

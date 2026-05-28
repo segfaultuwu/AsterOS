@@ -5,6 +5,8 @@
 #include "aster/kernel/syscall/syscall.h"
 #include "aster/debug/logging.h"
 #include "aster/drivers/console/console.h"
+#include "aster/drivers/keyboard.h"
+#include "aster/scheduler/scheduler.h"
 #include "aster/fs/vfs.h"
 
 #define SYSCALL_ERROR ((uint64_t)-1)
@@ -19,6 +21,15 @@ static uint64_t sys_exit(
 );
 
 static uint64_t sys_write(
+    uint64_t fd,
+    uint64_t buffer,
+    uint64_t length,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+);
+
+static uint64_t sys_read(
     uint64_t fd,
     uint64_t buffer,
     uint64_t length,
@@ -86,6 +97,7 @@ void syscall_register(syscall_num_t num, syscall_handler_t handler) {
 void syscall_register_defaults(void) {
     syscall_register(SYS_EXIT, sys_exit);
     syscall_register(SYS_WRITE, sys_write);
+    syscall_register(SYS_READ, sys_read);
     syscall_register(SYS_GETPID, sys_getpid);
     syscall_register(SYS_MKDIR, sys_mkdir);
     syscall_register(SYS_VFS_READ, sys_vfs_read);
@@ -157,6 +169,11 @@ static uint64_t sys_exit(
     log_info("sys_exit");
     log_u64("status", status);
 
+    Task *task = scheduler_current_task();
+    if (task != NULL) {
+        task->state = TASK_FINISHED;
+    }
+
     for (;;) {
         __asm__ volatile ("hlt");
     }
@@ -200,6 +217,38 @@ static uint64_t sys_write(
     return length;
 }
 
+static uint64_t sys_read(
+    uint64_t fd,
+    uint64_t buffer,
+    uint64_t length,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+) {
+    (void)arg3;
+    (void)arg4;
+    (void)arg5;
+
+    if (fd != 0 || buffer == 0 || length == 0) {
+        return SYSCALL_ERROR;
+    }
+
+    char *dst = (char *)buffer;
+    size_t written = 0;
+
+    while (written < length) {
+        if (!keyboard_has_data()) {
+            __asm__ volatile ("sti");
+            __asm__ volatile ("hlt");
+            continue;
+        }
+
+        dst[written++] = keyboard_read();
+    }
+
+    return written;
+}
+
 static uint64_t sys_getpid(
     uint64_t arg0,
     uint64_t arg1,
@@ -215,7 +264,12 @@ static uint64_t sys_getpid(
     (void)arg4;
     (void)arg5;
 
-    return 1;
+    Task *task = scheduler_current_task();
+    if (task == NULL) {
+        return 0;
+    }
+
+    return task->PID;
 }
 
 static uint64_t sys_mkdir(
