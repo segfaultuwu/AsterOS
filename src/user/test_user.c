@@ -73,6 +73,8 @@ bool user_test_setup(void) {
         return false;
     }
 
+    copy_bytes((uint8_t *)phys_to_virt(code_phys), user_code, sizeof(user_code));
+
     if (!vmm_map_page(
             USER_STACK_VADDR,
             stack_phys,
