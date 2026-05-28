@@ -12,6 +12,9 @@ typedef enum {
     SYS_OPEN = 3,
     SYS_CLOSE = 4,
     SYS_GETPID = 5,
+    SYS_MKDIR = 6,
+    SYS_VFS_READ = 7,
+    SYS_VFS_WRITE = 8,
     SYS_MAX
 } syscall_num_t;
 

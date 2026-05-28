@@ -5,6 +5,7 @@
 #include "aster/kernel/syscall/syscall.h"
 #include "aster/debug/logging.h"
 #include "aster/drivers/console/console.h"
+#include "aster/fs/vfs.h"
 
 #define SYSCALL_ERROR ((uint64_t)-1)
 
@@ -35,6 +36,33 @@ static uint64_t sys_getpid(
     uint64_t arg5
 );
 
+static uint64_t sys_mkdir(
+    uint64_t path,
+    uint64_t arg1,
+    uint64_t arg2,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+);
+
+static uint64_t sys_vfs_read(
+    uint64_t path,
+    uint64_t buffer,
+    uint64_t length,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+);
+
+static uint64_t sys_vfs_write(
+    uint64_t path,
+    uint64_t buffer,
+    uint64_t length,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+);
+
 static syscall_handler_t syscall_table[SYS_MAX] = {
     [SYS_EXIT] = NULL,
     [SYS_WRITE] = NULL,
@@ -42,6 +70,9 @@ static syscall_handler_t syscall_table[SYS_MAX] = {
     [SYS_OPEN] = NULL,
     [SYS_CLOSE] = NULL,
     [SYS_GETPID] = NULL,
+    [SYS_MKDIR] = NULL,
+    [SYS_VFS_READ] = NULL,
+    [SYS_VFS_WRITE] = NULL,
 };
 
 void syscall_register(syscall_num_t num, syscall_handler_t handler) {
@@ -56,6 +87,9 @@ void syscall_register_defaults(void) {
     syscall_register(SYS_EXIT, sys_exit);
     syscall_register(SYS_WRITE, sys_write);
     syscall_register(SYS_GETPID, sys_getpid);
+    syscall_register(SYS_MKDIR, sys_mkdir);
+    syscall_register(SYS_VFS_READ, sys_vfs_read);
+    syscall_register(SYS_VFS_WRITE, sys_vfs_write);
 }
 
 void syscall_init(void) {
@@ -182,4 +216,61 @@ static uint64_t sys_getpid(
     (void)arg5;
 
     return 1;
+}
+
+static uint64_t sys_mkdir(
+    uint64_t path,
+    uint64_t arg1,
+    uint64_t arg2,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+) {
+    (void)arg1; (void)arg2; (void)arg3; (void)arg4; (void)arg5;
+
+    if (path == 0) return SYSCALL_ERROR;
+
+    const char *p = (const char *)path;
+
+    if (vfs_mkdir(p)) return 0;
+    return SYSCALL_ERROR;
+}
+
+static uint64_t sys_vfs_read(
+    uint64_t path,
+    uint64_t buffer,
+    uint64_t length,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+) {
+    (void)arg3; (void)arg4; (void)arg5;
+
+    if (path == 0 || buffer == 0) return SYSCALL_ERROR;
+
+    const char *p = (const char *)path;
+    void *buf = (void *)buffer;
+
+    size_t n = vfs_read_file(p, buf, (size_t)length);
+
+    return (uint64_t)n;
+}
+
+static uint64_t sys_vfs_write(
+    uint64_t path,
+    uint64_t buffer,
+    uint64_t length,
+    uint64_t arg3,
+    uint64_t arg4,
+    uint64_t arg5
+) {
+    (void)arg3; (void)arg4; (void)arg5;
+
+    if (path == 0 || buffer == 0) return SYSCALL_ERROR;
+
+    const char *p = (const char *)path;
+    const void *buf = (const void *)buffer;
+
+    if (vfs_write_file(p, buf, (size_t)length)) return length;
+    return SYSCALL_ERROR;
 }

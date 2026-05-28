@@ -18,7 +18,7 @@ set(FLANTERM_DIR ${CMAKE_SOURCE_DIR}/Flanterm)
 # Keep a lowercase compatibility path for older generated build rules.
 # Some cached Makefile artifacts still reference ${CMAKE_SOURCE_DIR}/flanterm.
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/flanterm AND EXISTS ${FLANTERM_DIR})
-    execute_process(
+  execute_process(
         COMMAND ${CMAKE_COMMAND} -E create_symlink ${FLANTERM_DIR} ${CMAKE_SOURCE_DIR}/flanterm
     )
 endif()
@@ -114,11 +114,19 @@ foreach(asm_file ${KERNEL_NASM_SOURCES})
   list(APPEND NASM_OBJECT_FILES ${obj_file})
 endforeach()
 
+add_custom_target(version_header
+    COMMAND ${CMAKE_SOURCE_DIR}/makever.sh
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating version.h"
+)
+
 add_executable(${KERNEL_NAME}
     ${KERNEL_C_SOURCES}
     ${NASM_OBJECT_FILES}
     ${FONT_OBJ}
 )
+
+add_dependencies(${KERNEL_NAME} version_header)
 
 target_include_directories(${KERNEL_NAME} PRIVATE
     ${INCLUDE_DIR}

@@ -19,6 +19,8 @@
 #include "aster/kernel/syscall/syscall.h"
 #include "aster/kernel/syscall/test_syscall.h"
 
+#include "aster/generated/version.h"
+
 void kmain(void) {
     serial_init();
 
@@ -34,6 +36,8 @@ void kmain(void) {
     log_init();
 
     log_ok("Console initialized");
+
+    log_infof("Booting AsterOS %s-%s", ASTER_VERSION_STRING, ASTER_BUILD_DATE);
 
     gdt_init();
     log_ok("GDT initialized");
@@ -65,7 +69,6 @@ void kmain(void) {
     }
 
     vfs_write_file("/Docs/ReadMe.TXT", "Hello VFS", 9);
-    vfs_write_file("/docs/CONFIG.json", "{\"v\":1}", 8);
 
     char buf[64];
     size_t n = vfs_read_file("/DOCS/readme.txt", buf, sizeof(buf)-1);

@@ -1,7 +1,10 @@
 #include "aster/debug/logging.h"
 
+#include <stdarg.h>
+
 #include "aster/drivers/console/console.h"
 #include "aster/drivers/serial.h"
+#include "aster/lib/kprintf.h"
 
 static bool logging_initialized = false;
 
@@ -10,15 +13,19 @@ static void log_serial_prefix(log_level_t level) {
         case LOG_LEVEL_INFO:
             serial_puts("[INFO] ");
             break;
+
         case LOG_LEVEL_OK:
             serial_puts("[ OK ] ");
             break;
+
         case LOG_LEVEL_WARN:
             serial_puts("[WARN] ");
             break;
+
         case LOG_LEVEL_ERROR:
             serial_puts("[ERR ] ");
             break;
+
         case LOG_LEVEL_PANIC:
             serial_puts("[PANIC] ");
             break;
@@ -56,61 +63,33 @@ static void log_console_prefix(log_level_t level) {
     console_write("\033[38;2;205;214;244m");
 }
 
-static void serial_put_u64(uint64_t value) {
-    char buf[32];
-    int i = 0;
+static void log_putc_callback(char c, void *ctx) {
+    (void)ctx;
 
-    if (value == 0) {
-        serial_putchar('0');
+    serial_putchar(c);
+
+    if (logging_initialized) {
+        console_putc(c);
+    }
+}
+
+static void log_vprintf(log_level_t level, const char *fmt, va_list args) {
+    if (fmt == 0) {
         return;
     }
 
-    while (value > 0) {
-        buf[i++] = '0' + (value % 10);
-        value /= 10;
+    log_serial_prefix(level);
+
+    if (logging_initialized) {
+        log_console_prefix(level);
     }
 
-    while (i > 0) {
-        serial_putchar(buf[--i]);
-    }
-}
+    kvprintf(log_putc_callback, 0, fmt, args);
 
-static void console_put_u64(uint64_t value) {
-    char buf[32];
-    int i = 0;
+    serial_puts("\n");
 
-    if (value == 0) {
-        console_putc('0');
-        return;
-    }
-
-    while (value > 0) {
-        buf[i++] = '0' + (value % 10);
-        value /= 10;
-    }
-
-    while (i > 0) {
-        console_putc(buf[--i]);
-    }
-}
-
-static void serial_put_hex_u64(uint64_t value) {
-    const char *hex = "0123456789ABCDEF";
-
-    serial_puts("0x");
-
-    for (int i = 60; i >= 0; i -= 4) {
-        serial_putchar(hex[(value >> i) & 0xF]);
-    }
-}
-
-static void console_put_hex_u64(uint64_t value) {
-    const char *hex = "0123456789ABCDEF";
-
-    console_write("0x");
-
-    for (int i = 60; i >= 0; i -= 4) {
-        console_putc(hex[(value >> i) & 0xF]);
+    if (logging_initialized) {
+        console_write("\033[0m\n");
     }
 }
 
@@ -119,7 +98,7 @@ void log_init(void) {
 }
 
 void log_write(log_level_t level, const char *message) {
-    if (message == NULL) {
+    if (message == 0) {
         return;
     }
 
@@ -132,6 +111,14 @@ void log_write(log_level_t level, const char *message) {
         console_write(message);
         console_write("\033[0m\n");
     }
+}
+
+void log_printf(log_level_t level, const char *fmt, ...) {
+    va_list args;
+
+    va_start(args, fmt);
+    log_vprintf(level, fmt, args);
+    va_end(args);
 }
 
 void log_info(const char *message) {
@@ -154,49 +141,66 @@ void log_panic(const char *message) {
     log_write(LOG_LEVEL_PANIC, message);
 
     for (;;) {
-        __asm__ volatile ("cli");
-        __asm__ volatile ("hlt");
+        __asm__ volatile ("cli; hlt");
+    }
+}
+
+void log_infof(const char *fmt, ...) {
+    va_list args;
+
+    va_start(args, fmt);
+    log_vprintf(LOG_LEVEL_INFO, fmt, args);
+    va_end(args);
+}
+
+void log_okf(const char *fmt, ...) {
+    va_list args;
+
+    va_start(args, fmt);
+    log_vprintf(LOG_LEVEL_OK, fmt, args);
+    va_end(args);
+}
+
+void log_warnf(const char *fmt, ...) {
+    va_list args;
+
+    va_start(args, fmt);
+    log_vprintf(LOG_LEVEL_WARN, fmt, args);
+    va_end(args);
+}
+
+void log_errorf(const char *fmt, ...) {
+    va_list args;
+
+    va_start(args, fmt);
+    log_vprintf(LOG_LEVEL_ERROR, fmt, args);
+    va_end(args);
+}
+
+void log_panicf(const char *fmt, ...) {
+    va_list args;
+
+    va_start(args, fmt);
+    log_vprintf(LOG_LEVEL_PANIC, fmt, args);
+    va_end(args);
+
+    for (;;) {
+        __asm__ volatile ("cli; hlt");
     }
 }
 
 void log_hex64(const char *label, uint64_t value) {
-    if (label == NULL) {
+    if (label == 0) {
         label = "value";
     }
 
-    serial_puts("[INFO] ");
-    serial_puts(label);
-    serial_puts(" = ");
-    serial_put_hex_u64(value);
-    serial_puts("\n");
-
-    if (logging_initialized) {
-        console_write("\033[38;2;137;180;250m[INFO] ");
-        console_write("\033[38;2;205;214;244m");
-        console_write(label);
-        console_write(" = ");
-        console_put_hex_u64(value);
-        console_write("\033[0m\n");
-    }
+    log_infof("%s = 0x%llx", label, value);
 }
 
 void log_u64(const char *label, uint64_t value) {
-    if (label == NULL) {
+    if (label == 0) {
         label = "value";
     }
 
-    serial_puts("[INFO] ");
-    serial_puts(label);
-    serial_puts(" = ");
-    serial_put_u64(value);
-    serial_puts("\n");
-
-    if (logging_initialized) {
-        console_write("\033[38;2;137;180;250m[INFO] ");
-        console_write("\033[38;2;205;214;244m");
-        console_write(label);
-        console_write(" = ");
-        console_put_u64(value);
-        console_write("\033[0m\n");
-    }
+    log_infof("%s = %llu", label, value);
 }
